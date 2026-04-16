@@ -64,7 +64,8 @@ def import_gnuplot_stitch(filename, ToV=0):
             # Data lines: numbers separated by spaces
             elif line:
                 parts = line.split()
-                if len(parts) >= 2 and current_spin is not None and current_band is not None:
+                if (len(parts) >= 2 and current_spin is not None and
+                        current_band is not None):
                     x, y_hartree = map(float, parts[:2])
                     # Convert from Hartree to eV and apply shift ToV
                     y_eV = y_hartree * 27.21138602 + ToV
@@ -124,7 +125,8 @@ def stitch_and_plot(data, color='black', linewidth=1.5, ylim=None):
             xmin = min(xs)
             xmax = max(xs)
 
-            # shift so that the leftmost point of this path is at cumulative_shift
+            # shift so that the leftmost point of this path is
+            # at cumulative_shift
             path_shifts[path] = cumulative_shift - xmin
 
             # increase cumulative_shift by the width of this path
@@ -135,7 +137,7 @@ def stitch_and_plot(data, color='black', linewidth=1.5, ylim=None):
     # -------------------------------
     fig, ax = plt.subplots(figsize=(6.0 / 2, 6.0 / 2))  # square figure
 
-    bands_y = []        # list of lists: [band_0_y_values, band_1_y_values, ...]
+    bands_y = []  # list of lists: [band_0_y_values, band_1_y_values, ...]
     stitched_x = None   # will store the common stitched x-axis
     max_stitched_x = 0  # for x-axis limit
 
@@ -169,7 +171,8 @@ def stitch_and_plot(data, color='black', linewidth=1.5, ylim=None):
     zero_band_index = None
 
     for idx, band_vals in enumerate(bands_y):
-        # if any point of this band is in [-0.03, 0.03] eV, treat it as the "zero" band
+        # if any point of this band is in [-0.03, 0.03] eV,
+        # treat it as the "zero" band
         if np.any((band_vals >= -0.03) & (band_vals <= 0.03)):
             zero_band_index = idx
             break
@@ -191,7 +194,8 @@ def stitch_and_plot(data, color='black', linewidth=1.5, ylim=None):
     if len(bands_y) > 0:
         plt.plot(stitched_x, bands_y[0], '-', color='red', linewidth=linewidth)
     if len(bands_y) > 1:
-        plt.plot(stitched_x, bands_y[1], '-', color='blue', linewidth=linewidth)
+        plt.plot(stitched_x, bands_y[1], '-', color='blue',
+                 linewidth=linewidth)
 
     # -------------------------------
     # Step 6: add vertical lines and labels at high-symmetry points
@@ -255,7 +259,9 @@ def stitch_and_plot(data, color='black', linewidth=1.5, ylim=None):
 # -------------------------------
 # Example usage
 # -------------------------------
-filename = r"C:\Users\dhouten\PhD_David\WSe2_bands_GGA_PW91_SO_DZ.gnuplot"  # replace with your filename
+# filename = r"C:\Users\dhouten\PhD_David\WSe2_bands_GGA_PW91_SO_DZ.gnuplot"
+# replace with your filename
+filename = r"./data/band.gnuplot"
 
 # Shift bands by 5.06 eV (e.g. to set VBM or Fermi level as zero)
 gnuplot_data = import_gnuplot_stitch(filename, ToV=5.06)
@@ -263,8 +269,12 @@ gnuplot_data = import_gnuplot_stitch(filename, ToV=5.06)
 # Plot stitched bands, highlighting first two bands
 bands = stitch_and_plot(gnuplot_data, color='blue', linewidth=2, ylim=[-2, 3])
 print(min(bands[1])-max(bands[0]))
-print(r'BG_K = ',abs((bands[1][np.argmax(bands[0])]-max(bands[0]))*1),'eV')
-print(r'ΔSOC_VB = ',abs((max(bands[-1])-max(bands[0]))*1000),'meV')
-print(r'ΔSOC_CB = ',abs((bands[1][np.argmax(bands[0])]-bands[2][np.argmax(bands[0])])*1000),'meV')
-print('ΔGamma-K = ',abs((bands[-1][0]-max(bands[0]))*1000),'meV')
-print('ΔK-Q_CB = ',(bands[1][np.argmax(bands[0])]-np.min(bands[1]))*1000, 'meV')
+print(r'BG_K = ', abs((bands[1][np.argmax(bands[0])]-max(bands[0]))*1), 'eV')
+print(r'ΔSOC_VB = ', abs((max(bands[-1])-max(bands[0]))*1000), 'meV')
+print(r'ΔSOC_CB = ',
+      abs((bands[1][np.argmax(bands[0])]-bands[2][np.argmax(bands[0])])*1000),
+      'meV')
+print('ΔGamma-K = ', abs((bands[-1][0]-max(bands[0]))*1000), 'meV')
+print('ΔK-Q_CB = ',
+      (bands[1][np.argmax(bands[0])]-np.min(bands[1]))*1000,
+      'meV')
