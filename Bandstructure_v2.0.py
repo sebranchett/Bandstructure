@@ -14,6 +14,7 @@ from matplotlib.ticker import MultipleLocator
 # Dictionary to map plain text to LaTeX labels for nice axis labels
 latex_labels = {
     "GAMMA": r'$\Gamma$',
+    "G": r'$\Gamma$',
     "K": r'$K$',
     "M": r'$M$',
     "X": r'$X$',
