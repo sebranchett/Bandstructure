@@ -11,6 +11,8 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
 
+HARTREE_TO_EV = 27.21138602
+
 # Dictionary to map plain text to LaTeX labels for nice axis labels
 latex_labels = {
     "GAMMA": r'$\Gamma$',
@@ -69,7 +71,7 @@ def import_gnuplot_stitch(filename, ToV=0):
                         current_band is not None):
                     x, y_hartree = map(float, parts[:2])
                     # Convert from Hartree to eV and apply shift ToV
-                    y_eV = y_hartree * 27.21138602 + ToV
+                    y_eV = y_hartree * HARTREE_TO_EV + ToV
                     data[(current_spin, current_band)].append(
                         (current_path, x, y_eV)
                     )
@@ -261,11 +263,16 @@ def stitch_and_plot(data, color='black', linewidth=1.5, ylim=None):
 # Example usage
 # -------------------------------
 # filename = r"C:\Users\dhouten\PhD_David\WSe2_bands_GGA_PW91_SO_DZ.gnuplot"
-# replace with your filename
+# replace with your filename(s)
 filename = r"./data/band.gnuplot"
+fermi_filename = r"./data/band.csv"
+
+fermi = np.loadtxt(fermi_filename, delimiter=',', skiprows=1)[0, 3] * HARTREE_TO_EV
+print('Fermi level (eV): ', fermi)
 
 # Shift bands by 5.06 eV (e.g. to set VBM or Fermi level as zero)
-gnuplot_data = import_gnuplot_stitch(filename, ToV=5.06)
+shift = 5.06
+gnuplot_data = import_gnuplot_stitch(filename, ToV=shift)
 
 # Plot stitched bands, highlighting first two bands
 bands = stitch_and_plot(gnuplot_data, color='blue', linewidth=2, ylim=[-2, 3])
