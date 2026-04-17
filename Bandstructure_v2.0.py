@@ -77,7 +77,7 @@ def import_gnuplot_stitch(filename):
     return data
 
 
-def stitch(data):
+def stitch(data, fermi):
     """
     Stitch together band structure k-path segments.
 
@@ -85,6 +85,8 @@ def stitch(data):
     ----------
     data : dict
         Output from import_gnuplot_stitch.
+    fermi : float
+        The Fermi level in eV.
 
     Returns
     -------
@@ -293,7 +295,8 @@ def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
     ax.yaxis.set_minor_locator(MultipleLocator(0.10))
 
     # Apply x-ticks and labels
-    plt.xticks(xticks, xtick_labels)
+    if len(xticks) > 0:
+        plt.xticks(xticks, xtick_labels)
 
     # Axis labels and limits
     plt.ylabel("Energy (eV)")
@@ -323,13 +326,16 @@ gnuplot_data = import_gnuplot_stitch(filename)
 
 # Plot stitched bands, highlighting first two bands
 stitched_x, bands_y, buf_max, xticks, xtick_labels = \
-    stitch(gnuplot_data)
+    stitch(gnuplot_data, fermi)
 
 # Shift bands by energy in eV (e.g. to set VBM or Fermi level as zero)
 # shift = 0.  # no shift
 # shift = 5.06  # eV arbitrary value
 # shift = -fermi  # Fermi level at 0 eV - useful for metals
 shift = -buf_max  # Max band under Fermi at 0 eV - useful for semiconductors
+
+if not isinstance(shift, (int, float)):
+    raise ValueError("Shift must be a number.")
 
 bands = plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
                    color='blue', linewidth=2, ylim=[-2, 3])
