@@ -324,7 +324,7 @@ print('Fermi level (eV): ', fermi)
 
 gnuplot_data = import_gnuplot_stitch(filename)
 
-# Plot stitched bands, highlighting first two bands
+# Stitch bands and get the maximum energy of the band below the Fermi level
 stitched_x, bands_y, buf_max, xticks, xtick_labels = \
     stitch(gnuplot_data, fermi)
 
@@ -337,6 +337,7 @@ shift = -buf_max  # Max band under Fermi at 0 eV - useful for semiconductors
 if not isinstance(shift, (int, float)):
     raise ValueError("Shift must be a number.")
 
+# Plot stitched bands, highlighting first two bands
 bands = plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
                    color='blue', linewidth=2, ylim=[-2, 3])
 print(min(bands[1])-max(bands[0]))
