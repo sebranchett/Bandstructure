@@ -29,7 +29,7 @@ latex_labels = {
 }
 
 
-def import_gnuplot_stitch(filename):
+def import_gnuplot(filename):
     """
     Read a .gnuplot band structure file and store the data in a dictionary.
 
@@ -77,16 +77,14 @@ def import_gnuplot_stitch(filename):
     return data
 
 
-def stitch(data, fermi):
+def stitch(data):
     """
     Stitch together band structure k-path segments.
 
     Parameters
     ----------
     data : dict
-        Output from import_gnuplot_stitch.
-    fermi : float
-        The Fermi level in eV.
+        Output from import_gnuplot.
 
     Returns
     -------
@@ -94,9 +92,6 @@ def stitch(data, fermi):
         The common x-axis values for all stitched bands.
     bands_y : np.ndarray
         2D array containing the energy values of all stitched bands.
-    buf_max : float or None
-        The maximum energy of the band that is fully below the Fermi level, or
-        None if no such band exists.
     xticks : list
         The x-axis tick positions.
     xtick_labels : list
@@ -170,21 +165,8 @@ def stitch(data, fermi):
 
     bands_y = np.array(bands_y)
 
-    # Find the highest band that is fully below the Fermi level
-    buf_index = None
-    for idx, band_vals in enumerate(bands_y):
-        # if all points of this band are below the Fermi level
-        if np.all(band_vals < fermi):
-            buf_index = idx
-    if buf_index is None:
-        buf_max = None
-        print("No band found with all values below the Fermi level.")
-    else:
-        buf_max = max(bands_y[buf_index])
-        print(f"Maximum energy of band below Fermi level: {buf_max:.3f} eV")
-
     # -------------------------------
-    # Step 6: add vertical lines and labels at high-symmetry points
+    # Step 4: add vertical lines and labels at high-symmetry points
     # -------------------------------
     xticks = []
     xtick_labels = []
@@ -213,11 +195,47 @@ def stitch(data, fermi):
         xticks.append(max_stitched_x)
         xtick_labels.append(latex_labels.get(last_label_end, last_label_end))
 
-    return stitched_x, bands_y, buf_max, xticks, xtick_labels
+    return stitched_x, bands_y, xticks, xtick_labels
+
+
+def find_fermi_buf_max(fermi_filename, bands_y):
+    """
+    Find the Fermi level and the maximum energy of the band
+    that is fully below the Fermi level.
+
+    Parameters
+    ----------
+    fermi_filename : str
+        The csv filename containing the Fermi level data.
+    bands_y : np.ndarray
+        2D array containing the energy values of all stitched bands.
+
+    Returns
+    -------
+    fermi : float
+        The Fermi level in eV.
+    buf_max : float or None
+        The maximum energy of the band that is fully below the Fermi level, or
+        None if no such band exists.
+    """
+
+    fermi = np.loadtxt(fermi_filename, delimiter=',', skiprows=1)[0, 3] \
+        * HARTREE_TO_EV
+    print('Fermi level (eV): ', fermi)
+
+    buf_max = None
+
+    for band_vals in bands_y:
+        if np.all(band_vals < fermi):
+            max_val = np.max(band_vals)
+            if buf_max is None or max_val > buf_max:
+                buf_max = max_val
+
+    return fermi, buf_max
 
 
 def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
-               color='black', linewidth=1.5, ylim=None):
+               color_VB='red', color_CB='blue', linewidth=1.5, ylim=None):
     """
     Stitch together band structure k-path segments and plot them.
 
@@ -250,7 +268,7 @@ def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
     bands_y = bands_y + shift  # apply energy shift to all bands
 
     # -------------------------------
-    # Step 4: find the band that crosses (or lies very near) 0 eV
+    # Step 1: find the band that crosses (or lies very near) 0 eV
     # -------------------------------
     zero_band_index = None
 
@@ -267,7 +285,7 @@ def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
         print("No band found with values near zero.")
 
     # -------------------------------
-    # Step 5: plot all bands
+    # Step 2: plot all bands
     # -------------------------------
     # Background bands (all) in dashed gray
     for band_vals in bands_y:
@@ -275,9 +293,10 @@ def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
 
     # Highlight first two bands in solid colors (red, blue)
     if len(bands_y) > 0:
-        plt.plot(stitched_x, bands_y[0], '-', color='red', linewidth=linewidth)
+        plt.plot(stitched_x, bands_y[0], '-', color=color_VB,
+                 linewidth=linewidth)
     if len(bands_y) > 1:
-        plt.plot(stitched_x, bands_y[1], '-', color='blue',
+        plt.plot(stitched_x, bands_y[1], '-', color=color_CB,
                  linewidth=linewidth)
 
     # Draw vertical lines at each high-symmetry point
@@ -315,18 +334,18 @@ def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
 # -------------------------------
 # filename = r"C:\Users\dhouten\PhD_David\WSe2_bands_GGA_PW91_SO_DZ.gnuplot"
 # replace with your filename(s)
-filename = r"./data/band.gnuplot"
-fermi_filename = r"./data/band.csv"
+filename = r"./data/band.gnuplot"  # AMS bands gnuplot output file
+fermi_filename = r"./data/band.csv"  # AMS bands csv output file
 
-fermi = np.loadtxt(fermi_filename, delimiter=',', skiprows=1)[0, 3] \
-    * HARTREE_TO_EV
-print('Fermi level (eV): ', fermi)
+# Import bands from gnuplot file
+gnuplot_data = import_gnuplot(filename)
 
-gnuplot_data = import_gnuplot_stitch(filename)
+# Stitch bands together and get high-symmetry points
+stitched_x, bands_y, xticks, xtick_labels = \
+    stitch(gnuplot_data)
 
-# Stitch bands and get the maximum energy of the band below the Fermi level
-stitched_x, bands_y, buf_max, xticks, xtick_labels = \
-    stitch(gnuplot_data, fermi)
+# Read Fermi level from csv file and find max band under Fermi level
+fermi, buf_max = find_fermi_buf_max(fermi_filename, bands_y)
 
 # Shift bands by energy in eV (e.g. to set VBM or Fermi level as zero)
 # shift = 0.  # no shift
@@ -334,19 +353,22 @@ stitched_x, bands_y, buf_max, xticks, xtick_labels = \
 # shift = -fermi  # Fermi level at 0 eV - useful for metals
 shift = -buf_max  # Max band under Fermi - top of VB for semiconductors
 
+# Validate shift value
 if not isinstance(shift, (int, float)):
     raise ValueError("Shift must be a number.")
 
 # Plot stitched bands, highlighting first two bands
 bands = plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
-                   color='blue', linewidth=1.5, ylim=[-2, 3])
+                   color_VB='red', color_CB='blue', linewidth=1.5,
+                   ylim=[-2, 3])
 print(min(bands[1])-max(bands[0]))
-print(r'BG_K = ', abs((bands[1][np.argmax(bands[0])]-max(bands[0]))*1), 'eV')
+print(r'BG_d = ', abs((bands[1][np.argmax(bands[0])]-max(bands[0]))*1), 'eV')
 print(r'ΔSOC_VB = ', abs((max(bands[-1])-max(bands[0]))*1000), 'meV')
 print(r'ΔSOC_CB = ',
       abs((bands[1][np.argmax(bands[0])]-bands[2][np.argmax(bands[0])])*1000),
       'meV')
-print('ΔGamma-K = ', abs((bands[-1][0]-max(bands[0]))*1000), 'meV')
-print('ΔK-Q_CB = ',
-      (bands[1][np.argmax(bands[0])]-np.min(bands[1]))*1000,
-      'meV')
+# Path dependent gaps:
+# print('ΔGamma-K = ', abs((bands[-1][0]-max(bands[0]))*1000), 'meV')
+# print('ΔK-Q_CB = ',
+#       (bands[1][np.argmax(bands[0])]-np.min(bands[1]))*1000,
+#       'meV')

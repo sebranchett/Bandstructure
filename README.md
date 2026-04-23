@@ -5,10 +5,10 @@ This repository contains a small Python tool to read and plot band-structure dat
 The script:
 
 - Reads .gnuplot band-structure files exported from AMS BAND
-- Reads .csv file exported from AMS BAND to fine the Fermi level
-- Searches for the maximum energy of the highest band completely under the Fermi level
 - Converts energies from Hartree to eV and applies an optional energy shift (e.g. to set the Fermi level or VBM to 0 eV)
 - “Stitches” together individual k‑path segments (e.g. Γ–K, K–M, …) into a continuous 1D k‑axis
+- Reads .csv file exported from AMS BAND, which contains the Fermi level
+- Searches for the maximum energy of the highest band completely under the Fermi level
 - Automatically detects the band closest to 0 eV (after the shift is applied) and brings it to the top of the list 
 - Produces a publication-style band-structure plot with:
 - Vertical lines at high-symmetry points
