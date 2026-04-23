@@ -1,6 +1,6 @@
 AMS BAND band-structure plotting in Python
 
-This repository contains a small Python tool to read and plot band-structure data produced by AMS BAND (Amsterdam Modeling Suite, BAND module).
+This directory contains a small Python tool to read and plot band-structure data produced by [AMS BAND (Amsterdam Modeling Suite, BAND module)](https://www.scm.com/doc/BAND/index.html).
 
 The script:
 
@@ -11,9 +11,9 @@ The script:
 - Searches for the maximum energy of the highest band completely under the Fermi level
 - Automatically detects the band closest to 0 eV (after the shift is applied) and brings it to the top of the list 
 - Produces a publication-style band-structure plot with:
-- Vertical lines at high-symmetry points
-- LaTeX-style labels (Γ, K, M, …) on the x‑axis
-- Customizable y‑axis limits, colors, and line styles
+  - Vertical lines at high-symmetry points
+  - LaTeX-style labels (Γ, K, M, …) on the x‑axis
+  - Customizable y‑axis limits, colors, and line styles
 
 The code is deliberately written with new Python users in mind:
 functions are short, variable names are descriptive, and there are many inline comments explaining what each step does.
