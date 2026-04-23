@@ -271,7 +271,7 @@ def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
     # -------------------------------
     # Background bands (all) in dashed gray
     for band_vals in bands_y:
-        plt.plot(stitched_x, band_vals, '--', color='gray', linewidth=0.5)
+        plt.plot(stitched_x, band_vals, '-', color='black', linewidth=1.)
 
     # Highlight first two bands in solid colors (red, blue)
     if len(bands_y) > 0:
@@ -332,14 +332,14 @@ stitched_x, bands_y, buf_max, xticks, xtick_labels = \
 # shift = 0.  # no shift
 # shift = 5.06  # eV arbitrary value
 # shift = -fermi  # Fermi level at 0 eV - useful for metals
-shift = -buf_max  # Max band under Fermi at 0 eV - useful for semiconductors
+shift = -buf_max  # Max band under Fermi - top of VB for semiconductors
 
 if not isinstance(shift, (int, float)):
     raise ValueError("Shift must be a number.")
 
 # Plot stitched bands, highlighting first two bands
 bands = plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
-                   color='blue', linewidth=2, ylim=[-2, 3])
+                   color='blue', linewidth=1.5, ylim=[-2, 3])
 print(min(bands[1])-max(bands[0]))
 print(r'BG_K = ', abs((bands[1][np.argmax(bands[0])]-max(bands[0]))*1), 'eV')
 print(r'ΔSOC_VB = ', abs((max(bands[-1])-max(bands[0]))*1000), 'meV')
