@@ -130,12 +130,16 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
     plt.title(plot_title)
     # Axis formatting
     plt.ylabel("Energy - $E_{VBM}$ (eV)")
-    ax.set_xlabel("k-path")
+    only_bse = len(datasets) == 1 and datasets[0]["name"] == "BSE"
     has_bse = any(dataset["name"] == "BSE" for dataset in datasets)
-    ax2 = None
-    if has_bse:
-        ax2 = ax.secondary_xaxis('top')
-        ax2.set_xlabel("q-path")
+    if only_bse:
+        ax.set_xlabel("Exciton k-path")
+    else:
+        ax.set_xlabel("k-path")
+        ax2 = None
+        if has_bse:
+            ax2 = ax.secondary_xaxis('top')
+            ax2.set_xlabel("q-path")
 
     # Plot vertical lines at the symmetry points and add labels
     symmetry_source = None
