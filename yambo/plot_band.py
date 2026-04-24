@@ -84,112 +84,110 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
     determined automatically based on the data. Default is None and None.
     """
 
-    data_dft = None
-    data_gw = None
-    data_bse = None
-    if file_dft:
-        data_dft = read_data(file_dft)
-    if file_gw:
-        data_gw = read_data(file_gw)
-    if file_bse:
-        data_bse = read_data(file_bse)
+    dataset_specs = [
+        ("DFT", file_dft, "black", 4),
+        ("GW", file_gw, "red", 4),
+        ("BSE", file_bse, "blue", 3),
+    ]
+
+    datasets = []
+    for name, file_path, color, omit_last in dataset_specs:
+        if file_path:
+            datasets.append(
+                {
+                    "name": name,
+                    "data": read_data(file_path),
+                    "color": color,
+                    "omit_last": omit_last,
+                }
+            )
+
+    if not datasets:
+        raise ValueError(
+            "At least one data file must be provided for plotting."
+        )
 
     plt.figure(figsize=(7, 6))
 
     linewidth = 0.5
     ax = plt.gca()
-    if label_all_bands:
-        if file_dft:
-            data_dft.plot(x=data_dft.columns[0], y=data_dft.columns[1:-4],
-                          label=labels(data_dft, 'DFT'), color='black',
-                          linewidth=linewidth, ax=ax)
-        if file_gw:
-            data_gw.plot(x=data_gw.columns[0], y=data_gw.columns[1:-4],
-                         label=labels(data_gw, 'GW'), color='red',
-                         linewidth=linewidth, ax=ax)
-        if file_bse:
-            data_bse.plot(x=data_bse.columns[0], y=data_bse.columns[1:-3],
-                          label=labels(data_bse, 'BSE', omit_last=3),
-                          color='blue', linewidth=linewidth, ax=ax)
-    else:
-        if file_dft:
-            data_dft.plot(x=data_dft.columns[0], y=data_dft.columns[1:-4],
-                          legend=False, color='black',
-                          linewidth=linewidth, ax=ax)
-        if file_gw:
-            data_gw.plot(x=data_gw.columns[0], y=data_gw.columns[1:-4],
-                         legend=False, color='red',
-                         linewidth=linewidth, ax=ax)
-        if file_bse:
-            data_bse.plot(x=data_bse.columns[0], y=data_bse.columns[1:-3],
-                          legend=False, color='blue',
-                          linewidth=linewidth, ax=ax)
+    for dataset in datasets:
+        data = dataset["data"]
+        omit_last = dataset["omit_last"]
+        plot_kwargs = {
+            "x": data.columns[0],
+            "y": data.columns[1:-omit_last],
+            "color": dataset["color"],
+            "linewidth": linewidth,
+            "ax": ax,
+        }
+        if label_all_bands:
+            plot_kwargs["label"] = labels(data, dataset["name"], omit_last)
+        else:
+            plot_kwargs["legend"] = False
+        data.plot(**plot_kwargs)
 
     plt.title(plot_title)
     # Axis formatting
     plt.ylabel("Energy - $E_{VBM}$ (eV)")
     ax.set_xlabel("k-path")
-    if file_bse:
+    has_bse = any(dataset["name"] == "BSE" for dataset in datasets)
+    ax2 = None
+    if has_bse:
         ax2 = ax.secondary_xaxis('top')
         ax2.set_xlabel("q-path")
 
     # Plot vertical lines at the symmetry points and add labels
-    symmetry_labels = False
-    if file_dft:
-        if "symmetry_label" in data_dft.columns:
-            symmetry_labels = True
-            symmetry_points = \
-                data_dft[data_dft["symmetry_label"].notna()].iloc[:, [0, -1]]
-    elif file_gw:
-        if "symmetry_label" in data_gw.columns:
-            symmetry_labels = True
-            symmetry_points = \
-                data_gw[data_gw["symmetry_label"].notna()].iloc[:, [0, -1]]
-    if symmetry_labels:
-        for _, sp in symmetry_points.iloc[:].iterrows():
-            plt.axvline(sp.iloc[0], color='gray', linestyle='--', alpha=0.5)
-            plt.xticks(symmetry_points.iloc[:, 0],
-                       labels=symmetry_points.iloc[:, 1])
-            if file_bse:
-                ax2.set_xticks(symmetry_points.iloc[:, 0],
-                               labels=symmetry_points.iloc[:, 1])
+    symmetry_source = None
+    for preferred_name in ["DFT", "GW"]:
+        for dataset in datasets:
+            if dataset["name"] == preferred_name and \
+                    "symmetry_label" in dataset["data"].columns:
+                symmetry_source = dataset["data"]
+                break
+        if symmetry_source is not None:
+            break
 
-    # axis limits
-    basis_data = None
-    if data_dft is not None:
-        basis_data = data_dft
-    elif data_gw is not None:
-        basis_data = data_gw
-    else:
-        basis_data = data_bse
-    xmin = basis_data.iloc[:, 0].min()
-    xmax = basis_data.iloc[:, 0].max()
+    if symmetry_source is not None:
+        symmetry_points = (
+            symmetry_source[symmetry_source["symmetry_label"].notna()]
+            .iloc[:, [0, -1]]
+        )
+        for k_value in symmetry_points.iloc[:, 0]:
+            plt.axvline(k_value, color='gray', linestyle='--', alpha=0.5)
+        plt.xticks(
+            symmetry_points.iloc[:, 0],
+            labels=symmetry_points.iloc[:, 1]
+        )
+        if ax2 is not None:
+            ax2.set_xticks(symmetry_points.iloc[:, 0],
+                           labels=symmetry_points.iloc[:, 1])
+
+    # axis limits from first dataset
+    xmin = datasets[0]["data"].iloc[:, 0].min()
+    xmax = datasets[0]["data"].iloc[:, 0].max()
     if ymin is None:
-        ymin = min(0., basis_data.iloc[:, 1:-4].min().min() - 0.5)
+        ymin = min(
+            0.,
+            datasets[0]["data"]
+            .iloc[:, 1:-datasets[0]["omit_last"]].min().min() - 0.5
+        )
     if ymax is None:
-        ymax = basis_data.iloc[:, 1:-4].max().max() + 0.5
+        ymax = (datasets[0]["data"]
+                .iloc[:, 1:-datasets[0]["omit_last"]].max().max() + 0.5)
     plt.xlim(xmin, xmax)
     plt.ylim(ymin, ymax)
     plt.axhline(0, color="black", linestyle=":", linewidth=1.5)
     if label_all_bands:
         plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     else:
-        legend_handles = []
-        if file_dft:
-            legend_handles.append(
-                Line2D([0], [0], color='black', lw=1.5, label='DFT')
-            )
-        if file_gw:
-            legend_handles.append(
-                Line2D([0], [0], color='red', lw=1.5, label='GW')
-            )
-        if file_bse:
-            legend_handles.append(
-                Line2D([0], [0], color='blue', lw=1.5, label='BSE')
-            )
-        if legend_handles:
-            plt.legend(handles=legend_handles, loc='center left',
-                       bbox_to_anchor=(1, 0.5))
+        legend_handles = [
+            Line2D([0], [0], color=dataset["color"], lw=1.5,
+                   label=dataset["name"])
+            for dataset in datasets
+        ]
+        plt.legend(handles=legend_handles, loc='center left',
+                   bbox_to_anchor=(1, 0.5))
 
     plt.grid(False)
     plt.tight_layout()
@@ -202,11 +200,11 @@ if __name__ == "__main__":
     file_dft = "data/o.bands_interpolated_dft"
     file_gw = "data/o.bands_interpolated_gw"
     file_bse = "data/o-BSE.excitons_interpolated"
+    label_all_bands = False  # True to label each band, False to label set
 
     # plot title and output file name
     plot_title = "MoS2 5x5x2 k-grid"
     output_file = os.path.join("output", plot_title.replace(" ", "_") + ".png")
-    label_all_bands = False  # True to label each band, False to label set
 
     plot_bands(file_dft, file_gw, file_bse, plot_title, output_file,
                label_all_bands, ymin=None, ymax=None)
