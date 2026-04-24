@@ -183,17 +183,21 @@ def _configure_x_axes(ax, datasets):
     return None
 
 
-def _get_symmetry_source(datasets):
+def _get_symmetry_source(datasets, symmetry_override=None):
     """
     Select the symmetry-label source dataset.
 
     Parameters:
     datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+    symmetry_override (pandas.DataFrame | None): Pre-loaded DataFrame to use
+    as the symmetry source instead of searching datasets. Default is None.
 
     Returns:
     pandas.DataFrame | None:
-    DFT data first, else GW data, else None if unavailable.
+    Override first, else DFT, else GW, else None if unavailable.
     """
+    if symmetry_override is not None:
+        return symmetry_override
     for preferred_name in ["DFT", "GW"]:
         for dataset in datasets:
             if dataset["name"] == preferred_name and \
@@ -304,7 +308,7 @@ def _add_legend(datasets, label_all_bands):
 
 def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
                output_file="band_structure.png", label_all_bands=False,
-               ymin=None, ymax=None):
+               ymin=None, ymax=None, symmetry_from_file=""):
     """
     Plots the band structure from DFT, GW, and BSE data files.
 
@@ -319,6 +323,9 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
     is "band_structure.png".
     ymin, ymax (float, optional): Y-axis limits. If None, limits are
     determined automatically based on the data. Default is None and None.
+    symmetry_from_file (str, optional): Path to a file from which symmetry
+    point positions and labels are read, without plotting its band data.
+    Useful when plotting BSE-only data. Default is Empty.
 
     Returns:
     None
@@ -337,7 +344,10 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
     plt.ylabel("Energy - $E_{VBM}$ (eV)")
     ax2 = _configure_x_axes(ax, datasets)
 
-    symmetry_source = _get_symmetry_source(datasets)
+    symmetry_override = (
+        read_data(symmetry_from_file) if symmetry_from_file else None
+    )
+    symmetry_source = _get_symmetry_source(datasets, symmetry_override)
     _plot_symmetry_guides(ax2, symmetry_source)
 
     _set_axis_limits(datasets, ymin, ymax)
@@ -355,6 +365,7 @@ if __name__ == "__main__":
     file_dft = "data/o.bands_interpolated_dft"
     file_gw = "data/o.bands_interpolated_gw"
     file_bse = "data/o-BSE.excitons_interpolated"
+    symmetry_from_file = ""  # "data/o.bands_interpolated_dft"  # useful for BSE only
     label_all_bands = False  # True to label each band, False to label set
 
     # plot title and output file name
@@ -362,4 +373,5 @@ if __name__ == "__main__":
     output_file = os.path.join("output", plot_title.replace(" ", "_") + ".png")
 
     plot_bands(file_dft, file_gw, file_bse, plot_title, output_file,
-               label_all_bands, ymin=None, ymax=None)
+               label_all_bands, ymin=None, ymax=None,
+               symmetry_from_file=symmetry_from_file)
