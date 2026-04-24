@@ -12,6 +12,5 @@ The script:
 
 Requirements:
 - Python 3.x
-- NumPy
 - Matplotlib
 - Pandas
