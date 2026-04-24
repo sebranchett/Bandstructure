@@ -1,3 +1,4 @@
+from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
@@ -56,7 +57,7 @@ def labels(data, prefix, omit_last=4):
     data (pd.DataFrame): The input DataFrame containing the columns to label.
     prefix (str): The prefix to add to each label.
     omit_last (int, optional): The number of columns to omit from the end.
-    Default is 4.
+    Default is 4, but set to 3 for BSE as it does not have symmetry labels.
 
     Returns:
     list: A list of labels with the specified prefix, excluding the last
@@ -68,38 +69,60 @@ def labels(data, prefix, omit_last=4):
 # data files to plot
 file_dft = "data/o.bands_interpolated_dft"
 file_gw = "data/o.bands_interpolated_gw"
-file_bse = "data/o-BSE.excitons_interpolated"
+file_bse = ""  # "data/o-BSE.excitons_interpolated"
 
-data_dft = read_data(file_dft)
-data_gw = read_data(file_gw)
-data_bse = read_data(file_bse)
+data_dft = None
+data_gw = None
+data_bse = None
+if file_dft:
+    data_dft = read_data(file_dft)
+if file_gw:
+    data_gw = read_data(file_gw)
+if file_bse:
+    data_bse = read_data(file_bse)
 
 # plot title and output file name
 plot_title = "MoS2 5x5x2 k-grid"
 output_file = os.path.join("output", plot_title.replace(" ", "_") + ".png")
+label_all_bands = True
 
 plt.figure(figsize=(7, 6))
 
 linewidth = 0.5
 ax = plt.gca()
-data_dft.plot(x=data_dft.columns[0], y=data_dft.columns[1:-4],
-              label=labels(data_dft, 'DFT'), color='black',
-              linewidth=linewidth, ax=ax)
-data_gw.plot(x=data_gw.columns[0], y=data_gw.columns[1:-4],
-             label=labels(data_gw, 'GW'), color='red', linewidth=linewidth,
-             ax=ax)
-data_bse.plot(x=data_bse.columns[0], y=data_bse.columns[1:-3],
-              label=labels(data_bse, 'BSE', omit_last=3), color='blue',
-              linewidth=linewidth, ax=ax)
+if label_all_bands:
+    if file_gw:
+        data_dft.plot(x=data_dft.columns[0], y=data_dft.columns[1:-4],
+                      label=labels(data_dft, 'DFT'), color='black',
+                      linewidth=linewidth, ax=ax)
+    if file_gw:
+        data_gw.plot(x=data_gw.columns[0], y=data_gw.columns[1:-4],
+                     label=labels(data_gw, 'GW'), color='red',
+                     linewidth=linewidth, ax=ax)
+    if file_bse:
+        data_bse.plot(x=data_bse.columns[0], y=data_bse.columns[1:-3],
+                      label=labels(data_bse, 'BSE', omit_last=3), color='blue',
+                      linewidth=linewidth, ax=ax)
+else:
+    if file_dft:
+        data_dft.plot(x=data_dft.columns[0], y=data_dft.columns[1:-4],
+                      legend=False, color='black', linewidth=linewidth, ax=ax)
+    if file_gw:
+        data_gw.plot(x=data_gw.columns[0], y=data_gw.columns[1:-4],
+                     legend=False, color='red', linewidth=linewidth, ax=ax)
+    if file_bse:
+        data_bse.plot(x=data_bse.columns[0], y=data_bse.columns[1:-3],
+                      legend=False, color='blue', linewidth=linewidth, ax=ax)
 
 plt.title(plot_title)
 # Axis formatting
 plt.ylabel("Energy - $E_{VBM}$ (eV)")
 
 # Add labels to both top and bottom x-axes
-ax2 = ax.secondary_xaxis('top')
 ax.set_xlabel("k-path")
-ax2.set_xlabel("q-path")
+if file_bse:
+    ax2 = ax.secondary_xaxis('top')
+    ax2.set_xlabel("q-path")
 
 # find the symmetry point labels in the last column of data_dft and plot them
 symmetry_points = data_dft[data_dft.iloc[:, -1].notna()].iloc[:, [0, -1]]
@@ -108,14 +131,24 @@ symmetry_points = data_dft[data_dft.iloc[:, -1].notna()].iloc[:, [0, -1]]
 for _, sp in symmetry_points.iloc[:].iterrows():
     plt.axvline(sp.iloc[0], color='gray', linestyle='--', alpha=0.5)
     plt.xticks(symmetry_points.iloc[:, 0], labels=symmetry_points.iloc[:, 1])
-    ax2.set_xticks(symmetry_points.iloc[:, 0],
-                   labels=symmetry_points.iloc[:, 1])
+    if file_bse:
+        ax2.set_xticks(symmetry_points.iloc[:, 0],
+                       labels=symmetry_points.iloc[:, 1])
 
 # axis limits
 plt.xlim(0, data_dft.iloc[:, 0].max())
 plt.ylim(max(-4, data_dft.iloc[:, 1:-4].min().min() - 0.5),
          max(4, data_dft.iloc[:, 1:-4].max().max() + 0.5))
-plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+if label_all_bands:
+    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+else:
+    legend_handles = [
+        Line2D([0], [0], color='black', lw=1.5, label='DFT'),
+        Line2D([0], [0], color='red', lw=1.5, label='GW'),
+        Line2D([0], [0], color='blue', lw=1.5, label='BSE'),
+    ]
+    plt.legend(handles=legend_handles, loc='center left',
+               bbox_to_anchor=(1, 0.5))
 plt.grid(False)
 plt.tight_layout()
 plt.savefig(output_file, dpi=300, bbox_inches='tight')
