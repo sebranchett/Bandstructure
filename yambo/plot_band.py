@@ -71,7 +71,7 @@ def read_data(filename):
     return data
 
 
-def labels(data, prefix, omit_last=4):
+def _build_band_labels(data, prefix, omit_last=4):
     """
     Generate a list of labels for the columns of a DataFrame.
 
@@ -88,24 +88,17 @@ def labels(data, prefix, omit_last=4):
     return (prefix + " - " + data.columns[1:-omit_last]).to_list()
 
 
-def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
-               output_file="band_structure.png", label_all_bands=False,
-               ymin=None, ymax=None):
+def _build_datasets(file_dft, file_gw, file_bse):
     """
-    Plots the band structure from DFT, GW, and BSE data files.
-    Parameters:
-    file_dft (str, optional): Path to the DFT data file. Default is Empty.
-    file_gw (str, optional): Path to the GW data file. Default is Empty.
-    file_bse (str, optional): Path to the BSE data file. Default is Empty.
-    plot_title (str, optional): Title of the plot. Default is an empty string.
-    label_all_bands (bool, optional): Whether to label each band individually
-    or just label the set (DFT, GW, BSE). Default is False (label set).
-    output_file (str, optional): Path to save the output plot image. Default
-    is "band_structure.png".
-    ymin, ymax (float, optional): Y-axis limits. If None, limits are
-    determined automatically based on the data. Default is None and None.
-    """
+    Load enabled datasets and attach plotting metadata.
 
+    Parameters:
+    file_dft, file_gw, file_bse (str): Optional input file paths.
+
+    Returns:
+    list[dict]: A list of dataset descriptors with keys `name`, `data`,
+    `color`, and `omit_last`.
+    """
     dataset_specs = [
         ("DFT", file_dft, "black", 4),
         ("GW", file_gw, "red", 4),
@@ -128,11 +121,22 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
         raise ValueError(
             "At least one data file must be provided for plotting."
         )
+    return datasets
 
-    plt.figure(figsize=(7, 6))
 
-    linewidth = 0.5
-    ax = plt.gca()
+def _plot_dataset_lines(ax, datasets, label_all_bands, linewidth):
+    """
+    Plot all selected datasets on the provided axes.
+
+    Parameters:
+    ax (matplotlib.axes.Axes): Axis used for plotting.
+    datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+    label_all_bands (bool): Whether to label every plotted band.
+    linewidth (float): Line width used for all curves.
+
+    Returns:
+    None
+    """
     for dataset in datasets:
         data = dataset["data"]
         omit_last = dataset["omit_last"]
@@ -144,84 +148,200 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
             "ax": ax,
         }
         if label_all_bands:
-            plot_kwargs["label"] = labels(data, dataset["name"], omit_last)
+            plot_kwargs["label"] = _build_band_labels(
+                data, dataset["name"], omit_last
+            )
         else:
             plot_kwargs["legend"] = False
         data.plot(**plot_kwargs)
 
-    plt.title(plot_title)
-    # Axis formatting
-    plt.ylabel("Energy - $E_{VBM}$ (eV)")
+
+def _configure_x_axes(ax, datasets):
+    """
+    Configure bottom and optional top x-axes.
+
+    Parameters:
+    ax (matplotlib.axes.Axes): Primary axis for the plot.
+    datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+
+    Returns:
+    matplotlib.axes._secondary_axes.SecondaryAxis | None:
+    The top axis when needed (BSE overlay case), otherwise None.
+    """
     only_bse = len(datasets) == 1 and datasets[0]["name"] == "BSE"
     has_bse = any(dataset["name"] == "BSE" for dataset in datasets)
-    if only_bse:
-        ax.set_xlabel("Exciton k-path")
-    else:
-        ax.set_xlabel("k-path")
-        ax2 = None
-        if has_bse:
-            ax2 = ax.secondary_xaxis('top')
-            ax2.set_xlabel("q-path")
 
-    # Plot vertical lines at the symmetry points and add labels
-    symmetry_source = None
+    if only_bse:
+        ax.set_xlabel("q-path")
+        return None
+
+    ax.set_xlabel("k-path")
+    if has_bse:
+        ax2 = ax.secondary_xaxis('top')
+        ax2.set_xlabel("q-path")
+        return ax2
+    return None
+
+
+def _get_symmetry_source(datasets):
+    """
+    Select the symmetry-label source dataset.
+
+    Parameters:
+    datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+
+    Returns:
+    pandas.DataFrame | None:
+    DFT data first, else GW data, else None if unavailable.
+    """
     for preferred_name in ["DFT", "GW"]:
         for dataset in datasets:
             if dataset["name"] == preferred_name and \
                     "symmetry_label" in dataset["data"].columns:
-                symmetry_source = dataset["data"]
-                break
-        if symmetry_source is not None:
-            break
+                return dataset["data"]
+    return None
 
-    if symmetry_source is not None:
-        symmetry_points = (
-            symmetry_source[symmetry_source["symmetry_label"].notna()]
-            .iloc[:, [0, -1]]
-        )
-        symmetry_labels = (
-            symmetry_points.iloc[:, 1]
-            .astype(str)
-            .str.replace("[", "", regex=False)
-            .str.replace("]", "", regex=False)
-            .str.strip()
-            .map(lambda label: latex_labels.get(label, label))
-        )
-        for k_value in symmetry_points.iloc[:, 0]:
-            plt.axvline(k_value, color='gray', linestyle='--', alpha=0.5)
-        plt.xticks(
-            symmetry_points.iloc[:, 0],
-            labels=symmetry_labels
-        )
-        if ax2 is not None:
-            ax2.set_xticks(symmetry_points.iloc[:, 0],
-                           labels=symmetry_labels)
 
-    # axis limits from first dataset
-    xmin = datasets[0]["data"].iloc[:, 0].min()
-    xmax = datasets[0]["data"].iloc[:, 0].max()
+def _clean_and_map_symmetry_labels(raw_labels):
+    """
+    Normalize symmetry labels and map known tokens to LaTeX labels.
+
+    Parameters:
+    raw_labels (pandas.Series): Raw symmetry labels from input data.
+
+    Returns:
+    pandas.Series: Cleaned labels ready for axis ticks.
+    """
+    return (
+        raw_labels.astype(str)
+        .str.replace("[", "", regex=False)
+        .str.replace("]", "", regex=False)
+        .str.strip()
+        .map(lambda label: latex_labels.get(label, label))
+    )
+
+
+def _plot_symmetry_guides(ax2, symmetry_source):
+    """
+    Draw vertical symmetry guides and apply tick labels.
+
+    Parameters:
+    ax2 (SecondaryAxis | None): Optional top x-axis.
+    symmetry_source (pandas.DataFrame | None): Source with symmetry labels.
+
+    Returns:
+    None
+    """
+    if symmetry_source is None:
+        return
+
+    symmetry_points = (
+        symmetry_source[symmetry_source["symmetry_label"].notna()]
+        .iloc[:, [0, -1]]
+    )
+    symmetry_labels = _clean_and_map_symmetry_labels(
+        symmetry_points.iloc[:, 1]
+    )
+
+    for k_value in symmetry_points.iloc[:, 0]:
+        plt.axvline(k_value, color='gray', linestyle='--', alpha=0.5)
+    plt.xticks(symmetry_points.iloc[:, 0], labels=symmetry_labels)
+    if ax2 is not None:
+        ax2.set_xticks(symmetry_points.iloc[:, 0], labels=symmetry_labels)
+
+
+def _set_axis_limits(datasets, ymin=None, ymax=None):
+    """
+    Set plot limits using the first dataset.
+
+    Parameters:
+    datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+    ymin, ymax (float | None): Optional explicit y-limits.
+
+    Returns:
+    None
+    """
+    basis_data = datasets[0]["data"]
+    basis_omit_last = datasets[0]["omit_last"]
+    xmin = basis_data.iloc[:, 0].min()
+    xmax = basis_data.iloc[:, 0].max()
     if ymin is None:
         ymin = min(
             0.,
-            datasets[0]["data"]
-            .iloc[:, 1:-datasets[0]["omit_last"]].min().min() - 0.5
+            basis_data.iloc[:, 1:-basis_omit_last].min().min() - 0.5
         )
     if ymax is None:
-        ymax = (datasets[0]["data"]
-                .iloc[:, 1:-datasets[0]["omit_last"]].max().max() + 0.5)
+        ymax = basis_data.iloc[:, 1:-basis_omit_last].max().max() + 0.5
+
     plt.xlim(xmin, xmax)
     plt.ylim(ymin, ymax)
     plt.axhline(0, color="black", linestyle=":", linewidth=1.5)
+
+
+def _add_legend(datasets, label_all_bands):
+    """
+    Add either full-band legend or concise dataset legend.
+
+    Parameters:
+    datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+    label_all_bands (bool): Controls full-band vs compact legend mode.
+
+    Returns:
+    None
+    """
     if label_all_bands:
         plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    else:
-        legend_handles = [
-            Line2D([0], [0], color=dataset["color"], lw=1.5,
-                   label=dataset["name"])
-            for dataset in datasets
-        ]
-        plt.legend(handles=legend_handles, loc='center left',
-                   bbox_to_anchor=(1, 0.5))
+        return
+
+    legend_handles = [
+        Line2D([0], [0], color=dataset["color"], lw=1.5,
+               label=dataset["name"])
+        for dataset in datasets
+    ]
+    plt.legend(handles=legend_handles, loc='center left',
+               bbox_to_anchor=(1, 0.5))
+
+
+def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
+               output_file="band_structure.png", label_all_bands=False,
+               ymin=None, ymax=None):
+    """
+    Plots the band structure from DFT, GW, and BSE data files.
+
+    Parameters:
+    file_dft (str, optional): Path to the DFT data file. Default is Empty.
+    file_gw (str, optional): Path to the GW data file. Default is Empty.
+    file_bse (str, optional): Path to the BSE data file. Default is Empty.
+    plot_title (str, optional): Title of the plot. Default is an empty string.
+    label_all_bands (bool, optional): Whether to label each band individually
+    or just label the set (DFT, GW, BSE). Default is False (label set).
+    output_file (str, optional): Path to save the output plot image. Default
+    is "band_structure.png".
+    ymin, ymax (float, optional): Y-axis limits. If None, limits are
+    determined automatically based on the data. Default is None and None.
+
+    Returns:
+    None
+    """
+
+    datasets = _build_datasets(file_dft, file_gw, file_bse)
+
+    plt.figure(figsize=(7, 6))
+
+    linewidth = 0.5
+    ax = plt.gca()
+    _plot_dataset_lines(ax, datasets, label_all_bands, linewidth)
+
+    plt.title(plot_title)
+    # Axis formatting
+    plt.ylabel("Energy - $E_{VBM}$ (eV)")
+    ax2 = _configure_x_axes(ax, datasets)
+
+    symmetry_source = _get_symmetry_source(datasets)
+    _plot_symmetry_guides(ax2, symmetry_source)
+
+    _set_axis_limits(datasets, ymin, ymax)
+    _add_legend(datasets, label_all_bands)
 
     plt.grid(False)
     plt.tight_layout()
