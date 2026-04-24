@@ -2,6 +2,8 @@ Yambo band-structure plotting in Python
 
 This directory contains a Python tool to read and plot band-structure data produced by [Yambo)](https://www.yambo-code.eu/).
 
+Note that all bands in a plot must have the same k-path.
+
 The script:
 
 - Reads interpolated DFT, GW and BSE bands from YAMBO post processing calculation files

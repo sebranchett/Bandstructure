@@ -5,6 +5,28 @@ import os
 import re
 
 
+# Dictionary to map plain text to LaTeX labels for nice axis labels
+latex_labels = {
+    "GAMMA": r'$\Gamma$',
+    "G": r'$\Gamma$',
+    "A": r'$A$',
+    "F": r'$F$',
+    "H": r'$H$',
+    "K": r'$K$',
+    "L": r'$L$',
+    "M": r'$M$',
+    "P": r'$P$',
+    "Q": r'$Q$',
+    "R": r'$R$',
+    "U": r'$U$',
+    "W": r'$W$',
+    "X": r'$X$',
+    "Y": r'$Y$',
+    "Z": r'$Z$',
+    # Add more if needed
+}
+
+
 def read_data(filename):
     """
     Reads data from a file and assigns column names based on a specified row.
@@ -157,15 +179,23 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
             symmetry_source[symmetry_source["symmetry_label"].notna()]
             .iloc[:, [0, -1]]
         )
+        symmetry_labels = (
+            symmetry_points.iloc[:, 1]
+            .astype(str)
+            .str.replace("[", "", regex=False)
+            .str.replace("]", "", regex=False)
+            .str.strip()
+            .map(lambda label: latex_labels.get(label, label))
+        )
         for k_value in symmetry_points.iloc[:, 0]:
             plt.axvline(k_value, color='gray', linestyle='--', alpha=0.5)
         plt.xticks(
             symmetry_points.iloc[:, 0],
-            labels=symmetry_points.iloc[:, 1]
+            labels=symmetry_labels
         )
         if ax2 is not None:
             ax2.set_xticks(symmetry_points.iloc[:, 0],
-                           labels=symmetry_points.iloc[:, 1])
+                           labels=symmetry_labels)
 
     # axis limits from first dataset
     xmin = datasets[0]["data"].iloc[:, 0].min()
@@ -200,6 +230,7 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
 
 
 if __name__ == "__main__":
+    # All files must have the same k-path
     # data files to plot
     file_dft = "data/o.bands_interpolated_dft"
     file_gw = "data/o.bands_interpolated_gw"
