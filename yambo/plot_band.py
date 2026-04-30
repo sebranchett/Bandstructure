@@ -171,14 +171,15 @@ def _configure_x_axes(ax, datasets):
     only_bse = len(datasets) == 1 and datasets[0]["name"] == "BSE"
     has_bse = any(dataset["name"] == "BSE" for dataset in datasets)
 
+    bse_label = "Exciton Momentum q (a.u.)"
     if only_bse:
-        ax.set_xlabel("q-path")
+        ax.set_xlabel(bse_label)
         return None
 
     ax.set_xlabel("k-path")
     if has_bse:
         ax2 = ax.secondary_xaxis('top')
-        ax2.set_xlabel("q-path")
+        ax2.set_xlabel(bse_label)
         return ax2
     return None
 
@@ -225,13 +226,19 @@ def _clean_and_map_symmetry_labels(raw_labels):
     )
 
 
-def _plot_symmetry_guides(ax2, symmetry_source):
+def _plot_symmetry_guides(ax2, symmetry_source,
+                          label_bottom_axis=True,
+                          label_top_axis=True):
     """
     Draw vertical symmetry guides and apply tick labels.
 
     Parameters:
     ax2 (SecondaryAxis | None): Optional top x-axis.
     symmetry_source (pandas.DataFrame | None): Source with symmetry labels.
+    label_bottom_axis (bool): Whether to apply symmetry labels to the
+    primary (bottom) x-axis.
+    label_top_axis (bool): Whether to apply symmetry labels to the optional
+    top x-axis.
 
     Returns:
     None
@@ -249,8 +256,10 @@ def _plot_symmetry_guides(ax2, symmetry_source):
 
     for k_value in symmetry_points.iloc[:, 0]:
         plt.axvline(k_value, color='gray', linestyle='--', alpha=0.5)
-    plt.xticks(symmetry_points.iloc[:, 0], labels=symmetry_labels)
-    if ax2 is not None:
+
+    if label_bottom_axis:
+        plt.xticks(symmetry_points.iloc[:, 0], labels=symmetry_labels)
+    if ax2 is not None and label_top_axis:
         ax2.set_xticks(symmetry_points.iloc[:, 0], labels=symmetry_labels)
 
 
@@ -344,11 +353,18 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
     plt.ylabel("Energy - $E_{VBM}$ (eV)")
     ax2 = _configure_x_axes(ax, datasets)
 
+    only_bse = len(datasets) == 1 and datasets[0]["name"] == "BSE"
+
     symmetry_override = (
         read_data(symmetry_from_file) if symmetry_from_file else None
     )
     symmetry_source = _get_symmetry_source(datasets, symmetry_override)
-    _plot_symmetry_guides(ax2, symmetry_source)
+    _plot_symmetry_guides(
+        ax2,
+        symmetry_source,
+        label_bottom_axis=not only_bse,
+        label_top_axis=False,
+    )
 
     _set_axis_limits(datasets, ymin, ymax)
     _add_legend(datasets, label_all_bands)
@@ -360,12 +376,10 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
 
 
 if __name__ == "__main__":
-    # All files must have the same k-path
     # data files to plot
     file_dft = "data/o.bands_interpolated_dft"
     file_gw = "data/o.bands_interpolated_gw"
     file_bse = "data/o-BSE.excitons_interpolated"
-    symmetry_from_file = ""  # "data/o.bands_interpolated_dft"  # useful for BSE only
     label_all_bands = False  # True to label each band, False to label set
 
     # plot title and output file name
@@ -373,5 +387,4 @@ if __name__ == "__main__":
     output_file = os.path.join("output", plot_title.replace(" ", "_") + ".png")
 
     plot_bands(file_dft, file_gw, file_bse, plot_title, output_file,
-               label_all_bands, ymin=None, ymax=None,
-               symmetry_from_file=symmetry_from_file)
+               label_all_bands, ymin=None, ymax=None)
