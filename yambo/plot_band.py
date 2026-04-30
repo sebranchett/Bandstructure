@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 import re
+from dataclasses import dataclass
 
 
 # Dictionary to map plain text to LaTeX labels for nice axis labels
@@ -40,15 +41,13 @@ def read_data(filename):
     """
     data = pd.read_csv(filename, sep=r'\s+', comment='#', header=None)
     # Find the row containing the string "(a.u.)"
-    col_title_row = None
     title_line = None
     with open(filename, 'r') as f:
-        for i, line in enumerate(f):
+        for line in f:
             if "(a.u.)" in line:
-                col_title_row = i
                 title_line = line
                 break
-    if col_title_row is None:
+    if title_line is None:
         raise ValueError("Column title row not found in file: " + filename)
 
     # Read column names by splitting the title line on 2 or more spaces
@@ -88,6 +87,24 @@ def _build_band_labels(data, prefix, omit_last=4):
     return (prefix + " - " + data.columns[1:-omit_last]).to_list()
 
 
+@dataclass
+class Dataset:
+    """Loaded dataset with metadata used for plotting."""
+
+    name: str
+    data: pd.DataFrame
+    color: str
+    omit_last: int
+
+
+@dataclass(frozen=True)
+class PlotMode:
+    """High-level plot mode flags derived from enabled datasets."""
+
+    has_bse: bool
+    only_bse: bool
+
+
 def _build_datasets(file_dft, file_gw, file_bse):
     """
     Load enabled datasets and attach plotting metadata.
@@ -96,8 +113,7 @@ def _build_datasets(file_dft, file_gw, file_bse):
     file_dft, file_gw, file_bse (str): Optional input file paths.
 
     Returns:
-    list[dict]: A list of dataset descriptors with keys `name`, `data`,
-    `color`, and `omit_last`.
+    list[Dataset]: Loaded datasets and plotting metadata.
     """
     dataset_specs = [
         ("DFT", file_dft, "black", 4),
@@ -109,12 +125,12 @@ def _build_datasets(file_dft, file_gw, file_bse):
     for name, file_path, color, omit_last in dataset_specs:
         if file_path:
             datasets.append(
-                {
-                    "name": name,
-                    "data": read_data(file_path),
-                    "color": color,
-                    "omit_last": omit_last,
-                }
+                Dataset(
+                    name=name,
+                    data=read_data(file_path),
+                    color=color,
+                    omit_last=omit_last,
+                )
             )
 
     if not datasets:
@@ -130,7 +146,7 @@ def _plot_dataset_lines(ax, datasets, label_all_bands, linewidth):
 
     Parameters:
     ax (matplotlib.axes.Axes): Axis used for plotting.
-    datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+    datasets (list[Dataset]): Dataset descriptors from `_build_datasets`.
     label_all_bands (bool): Whether to label every plotted band.
     linewidth (float): Line width used for all curves.
 
@@ -138,46 +154,43 @@ def _plot_dataset_lines(ax, datasets, label_all_bands, linewidth):
     None
     """
     for dataset in datasets:
-        data = dataset["data"]
-        omit_last = dataset["omit_last"]
+        data = dataset.data
+        omit_last = dataset.omit_last
         plot_kwargs = {
             "x": data.columns[0],
             "y": data.columns[1:-omit_last],
-            "color": dataset["color"],
+            "color": dataset.color,
             "linewidth": linewidth,
             "ax": ax,
         }
         if label_all_bands:
             plot_kwargs["label"] = _build_band_labels(
-                data, dataset["name"], omit_last
+                data, dataset.name, omit_last
             )
         else:
             plot_kwargs["legend"] = False
         data.plot(**plot_kwargs)
 
 
-def _configure_x_axes(ax, datasets):
+def _configure_x_axes(ax, mode):
     """
     Configure bottom and optional top x-axes.
 
     Parameters:
     ax (matplotlib.axes.Axes): Primary axis for the plot.
-    datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+    mode (PlotMode): Plot mode flags from `_resolve_plot_mode`.
 
     Returns:
     matplotlib.axes._secondary_axes.SecondaryAxis | None:
     The top axis when needed (BSE overlay case), otherwise None.
     """
-    only_bse = len(datasets) == 1 and datasets[0]["name"] == "BSE"
-    has_bse = any(dataset["name"] == "BSE" for dataset in datasets)
-
     bse_label = "Exciton Momentum q (a.u.)"
-    if only_bse:
+    if mode.only_bse:
         ax.set_xlabel(bse_label)
         return None
 
     ax.set_xlabel("k-path")
-    if has_bse:
+    if mode.has_bse:
         ax2 = ax.secondary_xaxis('top')
         ax2.set_xlabel(bse_label)
         return ax2
@@ -189,7 +202,7 @@ def _get_symmetry_source(datasets, symmetry_override=None):
     Select the symmetry-label source dataset.
 
     Parameters:
-    datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+    datasets (list[Dataset]): Dataset descriptors from `_build_datasets`.
     symmetry_override (pandas.DataFrame | None): Pre-loaded DataFrame to use
     as the symmetry source instead of searching datasets. Default is None.
 
@@ -201,44 +214,23 @@ def _get_symmetry_source(datasets, symmetry_override=None):
         return symmetry_override
     for preferred_name in ["DFT", "GW"]:
         for dataset in datasets:
-            if dataset["name"] == preferred_name and \
-                    "symmetry_label" in dataset["data"].columns:
-                return dataset["data"]
+            if dataset.name == preferred_name and \
+                    "symmetry_label" in dataset.data.columns:
+                return dataset.data
     return None
 
 
-def _clean_and_map_symmetry_labels(raw_labels):
-    """
-    Normalize symmetry labels and map known tokens to LaTeX labels.
-
-    Parameters:
-    raw_labels (pandas.Series): Raw symmetry labels from input data.
-
-    Returns:
-    pandas.Series: Cleaned labels ready for axis ticks.
-    """
-    return (
-        raw_labels.astype(str)
-        .str.replace("[", "", regex=False)
-        .str.replace("]", "", regex=False)
-        .str.strip()
-        .map(lambda label: latex_labels.get(label, label))
-    )
-
-
-def _plot_symmetry_guides(ax2, symmetry_source,
-                          label_bottom_axis=True,
-                          label_top_axis=True):
+def _plot_symmetry_guides(ax, symmetry_source,
+                          apply_labels=True,
+                          draw_guides=True):
     """
     Draw vertical symmetry guides and apply tick labels.
 
     Parameters:
-    ax2 (SecondaryAxis | None): Optional top x-axis.
+    ax (matplotlib.axes.Axes): Primary axis where guides are drawn.
     symmetry_source (pandas.DataFrame | None): Source with symmetry labels.
-    label_bottom_axis (bool): Whether to apply symmetry labels to the
-    primary (bottom) x-axis.
-    label_top_axis (bool): Whether to apply symmetry labels to the optional
-    top x-axis.
+    apply_labels (bool): Whether to apply symmetry labels to bottom x-axis.
+    draw_guides (bool): Whether to draw vertical guide lines.
 
     Returns:
     None
@@ -250,32 +242,37 @@ def _plot_symmetry_guides(ax2, symmetry_source,
         symmetry_source[symmetry_source["symmetry_label"].notna()]
         .iloc[:, [0, -1]]
     )
-    symmetry_labels = _clean_and_map_symmetry_labels(
+    x_points = symmetry_points.iloc[:, 0]
+    symmetry_labels = (
         symmetry_points.iloc[:, 1]
+        .astype(str)
+        .str.replace("[", "", regex=False)
+        .str.replace("]", "", regex=False)
+        .str.strip()
+        .map(lambda label: latex_labels.get(label, label))
     )
 
-    for k_value in symmetry_points.iloc[:, 0]:
-        plt.axvline(k_value, color='gray', linestyle='--', alpha=0.5)
+    if draw_guides:
+        for k_value in x_points:
+            ax.axvline(k_value, color='gray', linestyle='--', alpha=0.5)
 
-    if label_bottom_axis:
-        plt.xticks(symmetry_points.iloc[:, 0], labels=symmetry_labels)
-    if ax2 is not None and label_top_axis:
-        ax2.set_xticks(symmetry_points.iloc[:, 0], labels=symmetry_labels)
+    if apply_labels:
+        ax.set_xticks(x_points, labels=symmetry_labels)
 
 
-def _set_axis_limits(datasets, ymin=None, ymax=None):
+def _set_axis_limits(ax, datasets, ymin=None, ymax=None):
     """
     Set plot limits using the first dataset.
 
     Parameters:
-    datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+    datasets (list[Dataset]): Dataset descriptors from `_build_datasets`.
     ymin, ymax (float | None): Optional explicit y-limits.
 
     Returns:
     None
     """
-    basis_data = datasets[0]["data"]
-    basis_omit_last = datasets[0]["omit_last"]
+    basis_data = datasets[0].data
+    basis_omit_last = datasets[0].omit_last
     xmin = basis_data.iloc[:, 0].min()
     xmax = basis_data.iloc[:, 0].max()
     if ymin is None:
@@ -286,33 +283,33 @@ def _set_axis_limits(datasets, ymin=None, ymax=None):
     if ymax is None:
         ymax = basis_data.iloc[:, 1:-basis_omit_last].max().max() + 0.5
 
-    plt.xlim(xmin, xmax)
-    plt.ylim(ymin, ymax)
-    plt.axhline(0, color="black", linestyle=":", linewidth=1.5)
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    ax.axhline(0, color="black", linestyle=":", linewidth=1.5)
 
 
-def _add_legend(datasets, label_all_bands):
+def _add_legend(ax, datasets, label_all_bands):
     """
     Add either full-band legend or concise dataset legend.
 
     Parameters:
-    datasets (list[dict]): Dataset descriptors from `_build_datasets`.
+    datasets (list[Dataset]): Dataset descriptors from `_build_datasets`.
     label_all_bands (bool): Controls full-band vs compact legend mode.
 
     Returns:
     None
     """
     if label_all_bands:
-        plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         return
 
     legend_handles = [
-        Line2D([0], [0], color=dataset["color"], lw=1.5,
-               label=dataset["name"])
+        Line2D([0], [0], color=dataset.color, lw=1.5,
+               label=dataset.name)
         for dataset in datasets
     ]
-    plt.legend(handles=legend_handles, loc='center left',
-               bbox_to_anchor=(1, 0.5))
+    ax.legend(handles=legend_handles, loc='center left',
+              bbox_to_anchor=(1, 0.5))
 
 
 def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
@@ -351,23 +348,23 @@ def plot_bands(file_dft="", file_gw="", file_bse="", plot_title="",
     plt.title(plot_title)
     # Axis formatting
     plt.ylabel("Energy - $E_{VBM}$ (eV)")
-    ax2 = _configure_x_axes(ax, datasets)
-
-    only_bse = len(datasets) == 1 and datasets[0]["name"] == "BSE"
+    has_bse = any(dataset.name == "BSE" for dataset in datasets)
+    mode = PlotMode(has_bse=has_bse, only_bse=(has_bse and len(datasets) == 1))
+    _configure_x_axes(ax, mode)
 
     symmetry_override = (
         read_data(symmetry_from_file) if symmetry_from_file else None
     )
     symmetry_source = _get_symmetry_source(datasets, symmetry_override)
     _plot_symmetry_guides(
-        ax2,
+        ax,
         symmetry_source,
-        label_bottom_axis=not only_bse,
-        label_top_axis=False,
+        apply_labels=not mode.only_bse,
+        draw_guides=not mode.only_bse,
     )
 
-    _set_axis_limits(datasets, ymin, ymax)
-    _add_legend(datasets, label_all_bands)
+    _set_axis_limits(ax, datasets, ymin, ymax)
+    _add_legend(ax, datasets, label_all_bands)
 
     plt.grid(False)
     plt.tight_layout()
