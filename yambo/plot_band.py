@@ -14,6 +14,7 @@ latex_labels = {
     "F": r'$F$',
     "H": r'$H$',
     "K": r'$K$',
+    "Kpp": r'$K$',
     "L": r'$L$',
     "M": r'$M$',
     "P": r'$P$',
@@ -184,7 +185,7 @@ def _configure_x_axes(ax, mode):
     matplotlib.axes._secondary_axes.SecondaryAxis | None:
     The top axis when needed (BSE overlay case), otherwise None.
     """
-    bse_label = "Exciton Momentum q (a.u.)"
+    bse_label = "Exciton Momentum $q$ (Bohr $^{-1}$)"
     if mode.only_bse:
         ax.set_xlabel(bse_label)
         return None
