@@ -17,14 +17,18 @@ HARTREE_TO_EV = 27.21138602
 latex_labels = {
     "GAMMA": r'$\Gamma$',
     "G": r'$\Gamma$',
-    "K": r'$K$',
-    "M": r'$M$',
-    "X": r'$X$',
-    "Y": r'$Y$',
-    "Z": r'$Z$',
-    "L": r'$L$',
-    "W": r'$W$',
-    "U": r'$U$',
+    "K": r'K',
+    "M": r'M',
+    "X": r'X',
+    "Y": r'Y',
+    "Z": r'Z',
+    "L": r'L',
+    "W": r'W',
+    "U": r'U',
+    "X_1": r'X$_1$',
+    "X_2": r'X$_2$',
+    "S": r'S',
+    "LAMBDA": r'$\Lambda$'
     # Add more if needed
 }
 
@@ -235,7 +239,7 @@ def find_fermi_buf_max(fermi_filename, bands_y):
 
 
 def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
-               color_VB='red', color_CB='blue', linewidth=1.5, ylim=None):
+               fermi, linewidth=1.5, ylim=None):
     """
     Stitch together band structure k-path segments and plot them.
 
@@ -265,18 +269,19 @@ def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
     """
 
     fig, ax = plt.subplots(figsize=(6.0 / 2, 6.0 / 2))  # square figure
-    bands_y = bands_y + shift  # apply energy shift to all bands
-
     # -------------------------------
     # Step 1: find the band that crosses (or lies very near) 0 eV
     # -------------------------------
     zero_band_index = None
 
     for idx, band_vals in enumerate(bands_y):
-        # if any point of this band is in [-0.03, 0.03] eV,
-        # treat it as the "zero" band
-        if np.any((band_vals >= -0.03) & (band_vals <= 0.03)):
+        # Check if the entire band lies below the Fermi level
+        # or at least has points below it
+        if np.any(band_vals < fermi):
             zero_band_index = idx
+    print(zero_band_index)
+
+    bands_y = bands_y + shift  # apply energy shift to all bands
 
     # If we found a zero band, rotate the array so that this band is first
     if zero_band_index is not None:
@@ -290,14 +295,6 @@ def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
     # Background bands (all) in dashed gray
     for band_vals in bands_y:
         plt.plot(stitched_x, band_vals, '-', color='black', linewidth=1.)
-
-    # Highlight first two bands in solid colors (red, blue)
-    if len(bands_y) > 0:
-        plt.plot(stitched_x, bands_y[0], '-', color=color_VB,
-                 linewidth=linewidth)
-    if len(bands_y) > 1:
-        plt.plot(stitched_x, bands_y[1], '-', color=color_CB,
-                 linewidth=linewidth)
 
     # Draw vertical lines at each high-symmetry point
     for xtick in xticks:
@@ -334,6 +331,9 @@ def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
 # -------------------------------
 # filename = r"C:\Users\dhouten\PhD_David\WSe2_bands_GGA_PW91_SO_DZ.gnuplot"
 # replace with your filename(s)
+
+# filename = r"C:\Users\dhouten\Downloads\band.gnuplot"  # AMS bands gnuplot output file
+# fermi_filename = r"C:\Users\dhouten\Downloads\band.csv"  # AMS bands csv output file
 filename = r"./data/band.gnuplot"  # AMS bands gnuplot output file
 fermi_filename = r"./data/band.csv"  # AMS bands csv output file
 
@@ -350,8 +350,8 @@ fermi, buf_max = find_fermi_buf_max(fermi_filename, bands_y)
 # Shift bands by energy in eV (e.g. to set VBM or Fermi level as zero)
 # shift = 0.  # no shift
 # shift = 5.06  # eV arbitrary value
-# shift = -fermi  # Fermi level at 0 eV - useful for metals
-shift = -buf_max  # Max band under Fermi - top of VB for semiconductors
+shift = -fermi  # Fermi level at 0 eV - useful for metals
+# shift = -buf_max  # Max band under Fermi - top of VB for semiconductors
 
 # Validate shift value
 if not isinstance(shift, (int, float)):
@@ -359,8 +359,15 @@ if not isinstance(shift, (int, float)):
 
 # Plot stitched bands, highlighting first two bands
 bands = plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
-                   color_VB='red', color_CB='blue', linewidth=1.5,
+                   fermi, linewidth=1.5,
                    ylim=[-2, 3])
+
+# With this you can highlight certain bands where bands[0] is always
+# the Top of Valence band (ToV)
+plt.plot(stitched_x, bands[0], '-', color='red', linewidth=1)
+plt.plot(stitched_x, bands[1], '-', color='blue', linewidth=1)
+
+# With this you can calculate different things, for example the bandgap
 print(min(bands[1])-max(bands[0]))
 print(r'BG_d = ', abs((bands[1][np.argmax(bands[0])]-max(bands[0]))*1), 'eV')
 print(r'ΔSOC_VB = ', abs((max(bands[-1])-max(bands[0]))*1000), 'meV')
