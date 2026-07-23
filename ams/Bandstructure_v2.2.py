@@ -321,8 +321,6 @@ def plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
     if ylim:
         plt.ylim(ylim)
 
-    plt.show()
-
     return bands_y
 
 
@@ -366,7 +364,7 @@ bands = plot_bands(stitched_x, bands_y, shift, xticks, xtick_labels,
 # the Top of Valence band (ToV)
 plt.plot(stitched_x, bands[0], '-', color='red', linewidth=1)
 plt.plot(stitched_x, bands[1], '-', color='blue', linewidth=1)
-
+plt.show()
 # With this you can calculate different things, for example the bandgap
 print(min(bands[1])-max(bands[0]))
 print(r'BG_d = ', abs((bands[1][np.argmax(bands[0])]-max(bands[0]))*1), 'eV')
@@ -379,3 +377,4 @@ print(r'ΔSOC_CB = ',
 # print('ΔK-Q_CB = ',
 #       (bands[1][np.argmax(bands[0])]-np.min(bands[1]))*1000,
 #       'meV')
+
